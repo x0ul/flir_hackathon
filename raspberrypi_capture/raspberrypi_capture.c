@@ -35,6 +35,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/spi/spidev.h>
 #include <limits.h>
 
+#include <time.h>
+
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 static void pabort(const char *s)
@@ -62,8 +64,17 @@ static void save_pgm_file(void)
 	char image_name[32];
 	int image_index = 0;
 
+	time_t timer;
+	char datebuffer[26];
+	struct tm* tm_info;
+
+	time(&timer);
+	tm_info = localtime(&timer);
+
+	strftime(datebuffer, 26, "%Y%m%d_%H%M%S", tm_info);
+
 	do {
-		sprintf(image_name, "IMG_%.4d.pgm", image_index);
+		sprintf(image_name, "IMG_%s_%.4d.pgm", datebuffer, image_index);
 		image_index += 1;
 		if (image_index > 9999) 
 		{
