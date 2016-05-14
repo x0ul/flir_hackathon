@@ -1,8 +1,8 @@
 
 TARGET = raspberrypi_capture
-LIBS = -lm
+LIBS = -lm -lwiringPi
 CC = gcc
-CFLAGS = -g -Wall
+CFLAGS = -g -Wall -O0 -std=c99
 
 .PHONY: default all clean
 
