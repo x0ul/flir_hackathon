@@ -91,9 +91,12 @@ static void save_pgm_file(void)
 		exit(1);
 	}
 
+	unsigned long row_averages[60] = {0};
+
 	printf("Calculating min/max values for proper scaling...\n");
 	for(i=0;i<60;i++)
 	{
+		unsigned long row_total = 0;
 		for(j=0;j<80;j++)
 		{
 			if (lepton_image[i][j] > maxval) {
@@ -102,8 +105,16 @@ static void save_pgm_file(void)
 			if (lepton_image[i][j] < minval) {
 				minval = lepton_image[i][j];
 			}
+			row_total += lepton_image[i][j];
 		}
+		row_average[i] = row_total / 80;
 	}
+	unsigned long total = 0;
+	for(i=0; i<60;i++) {
+		total += row_average[i];
+	}
+	printf("average = %u", total / 2400);
+	
 	printf("maxval = %u\n",maxval);
 	printf("minval = %u\n",minval);
 	
