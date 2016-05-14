@@ -38,6 +38,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <time.h>
 #include <wiringPi.h>
 
+#define TRIG 0
+#define ECHO 2
+
+#define RED_LED 5
+#define GREEN_LED 4
+ 
 #define FLIR_CS 6
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
@@ -47,6 +53,27 @@ static void pabort(const char *s)
 	perror(s);
 	abort();
 }
+
+void pin_setup(void) {
+        wiringPiSetup();
+        pinMode(TRIG, OUTPUT);
+        pinMode(ECHO, INPUT);
+
+	pinMode(RED_LED, OUTPUT);
+	pinMode(GREEN_LED, OUTPUT);
+	pinMode(FLIR_CS, OUTPUT);
+ 
+        //TRIG pin must start LOW
+        digitalWrite(TRIG, LOW);
+        digitalWrite(RED_LED, LOW);
+        digitalWrite(GREEN_LED, LOW);
+        digitalWrite(FLIR_CS, HIGH);
+        delay(30);
+        digitalWrite(FLIR_CS, LOW);
+}
+
+
+void pulse_flir_cs(void);
 
 static const char *device = "/dev/spidev0.1";
 static uint8_t mode;
@@ -216,19 +243,31 @@ int main(int argc, char *argv[])
 		pabort("can't get max speed hz");
 	}
 
+	pin_setup();
+
 	printf("spi mode: %d\n", mode);
 	printf("bits per word: %d\n", bits);
 	printf("max speed: %d Hz (%d KHz)\n", speed, speed/1000);
 
-        digitalWrite(FLIR_CS, HIGH);
-        delay(200);
-        digitalWrite(FLIR_CS, LOW);
-        delay(100);
-	while(transfer(fd)!=59){}
+	//pulse_flir_cs();
+
+	int timeout = 0;
+
+	while(transfer(fd)!=59 && (timeout < 2000)){timeout++;}
+	if(timeout > 500) {
+		printf("timeout higher than 500 ?? %d \n", timeout);
+	}
 
 	close(fd);
 
 //	save_pgm_file();
 
 	return ret;
+}
+
+void pulse_flir_cs(void) {
+        digitalWrite(FLIR_CS, HIGH);
+        delay(200);
+        digitalWrite(FLIR_CS, LOW);
+        delay(100);
 }
