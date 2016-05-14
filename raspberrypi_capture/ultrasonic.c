@@ -5,7 +5,7 @@
 #define TRUE 1
  
 #define TRIG 0
-#define ECHO 1
+#define ECHO 2
 
 #define GREEN_LED 5
 #define RED_LED 4
