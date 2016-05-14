@@ -91,7 +91,7 @@ static void save_pgm_file(void)
 		exit(1);
 	}
 
-	unsigned long row_averages[60] = {0};
+	unsigned long row_average[60] = {0};
 
 	printf("Calculating min/max values for proper scaling...\n");
 	for(i=0;i<60;i++)
@@ -113,7 +113,7 @@ static void save_pgm_file(void)
 	for(i=0; i<60;i++) {
 		total += row_average[i];
 	}
-	printf("average = %u", total / 2400);
+	printf("average = %u\n", total / 60);
 	
 	printf("maxval = %u\n",maxval);
 	printf("minval = %u\n",minval);
