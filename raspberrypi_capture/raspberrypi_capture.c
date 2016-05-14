@@ -265,6 +265,32 @@ int main(int argc, char *argv[])
 	return ret;
 }
 
+enum grillStatus_t {
+	tooCold,
+	tooSmall,
+	justRight
+};
+
+void loop(void) {
+	// Ultrasonic range
+	int distance = getCM();
+	if(distance < 20) {
+		return;
+	}
+	
+	// Something's close, get a Thermal Image
+	getFLIR();
+	
+	// Process TI to determine grill status
+	grillStatus_t grillStatus = processFLIR();
+
+	// Indicate status to user
+	setLEDs(grillStatus);
+
+}
+
+	
+
 void pulse_flir_cs(void) {
         digitalWrite(FLIR_CS, HIGH);
         delay(200);
