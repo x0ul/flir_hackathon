@@ -260,16 +260,84 @@ int main(int argc, char *argv[])
 
 	close(fd);
 
+	loop(); // run the loop once
+
 //	save_pgm_file();
 
 	return ret;
 }
 
-enum grillStatus_t {
+int getCM() {
+        //Send trig pulse
+        digitalWrite(TRIG, HIGH);
+        delayMicroseconds(20);
+        digitalWrite(TRIG, LOW);
+ 
+        //Wait for echo start
+        while(digitalRead(ECHO) == LOW);
+ 
+	// TODO: Timeout faster on >100cm echoes
+        //Wait for echo end
+        long startTime = micros();
+        while(digitalRead(ECHO) == HIGH);
+        long travelTime = micros() - startTime;
+ 
+        //Get distance in cm
+        int distance = travelTime / 58;
+ 
+        return distance;
+}
+ 
+typedef enum grillStatus_t {
 	tooCold,
 	tooSmall,
 	justRight
-};
+} grillStatus_t;
+
+void getFLIR(void){
+	// nothing here
+	// TODO: Copy FLIR setup/capture from main()
+	;
+}
+
+grillStatus_t processFLIR(void){
+	// Image data in  lepton_image[80][80];
+	// Look at the middle row.  
+	unsigned int temp_guess[80] = {0};
+	for(int i=0; i<80; i++) {
+		unsigned int raw_value = lepton_image[29][i];
+		if(raw_value < 7500) { // Less than human body temp
+			temp_guess[i] = 0;
+		} else if (raw value < 8500) { // Between 20-40 C
+			temp_guess[i] = 1;
+		} else { // Greater than 40C, assume that's our heat source
+			temp_guess[i] = 2;
+		}
+	}
+	//Assume we're looking at circular heat source
+	return tooCold;
+}
+
+void setLEDs(grillStatus_t gs){
+	switch(gs){
+		case tooCold: 
+			digitalWrite(RED_LED, HIGH);
+			digitalWrite(GREEN_LED, LOW);
+			break;
+		case tooSmall: 
+			digitalWrite(RED_LED, HIGH);
+			digitalWrite(GREEN_LED, HIGH);
+			break;
+		case justRight: 
+			digitalWrite(RED_LED, LOW);
+			digitalWrite(GREEN_LED, HIGH);
+			break;
+		default: 
+			digitalWrite(RED_LED, LOW);
+			digitalWrite(GREEN_LED, LOW);
+			break;
+	}
+}
 
 void loop(void) {
 	// Ultrasonic range
@@ -279,6 +347,7 @@ void loop(void) {
 	}
 	
 	// Something's close, get a Thermal Image
+	// TODO: Pass FLIR image around
 	getFLIR();
 	
 	// Process TI to determine grill status
