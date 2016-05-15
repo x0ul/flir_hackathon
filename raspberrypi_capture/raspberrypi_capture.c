@@ -382,9 +382,7 @@ grillStatus_t processFLIR(uint32_t echoTime){
 	printf("Max: %d Min: %d Avg: %d Total: %d\n", max, min, average, total);
 	temp_c = (average - 7143) / 29;
 	int distance = get_distance_cm_at_temp_c(temp_c, echoTime);
-	if(distance <= 10) {
-		return tooClose;
-	} else if (distance > 80) {
+	if (distance > 80) {
 		return noGrill;
 	}
 	printf("Temperature: %d Corrected distance is: %d  Raw: %d \n", temp_c, distance, echoTime/58);
@@ -398,6 +396,10 @@ grillStatus_t processFLIR(uint32_t echoTime){
 		return tooCold;
 	//} else if (hotCount < 1500) {
 	} else {
+		if(distance <10) {
+			//Some heat, kinda close, flash red
+			return tooClose;
+		}
 		// Might be hot enough, edge check can push to green
 		double sqcm_per_pixel = ((0.47697553 * distance * 2) * (0.47697553 * distance * 2)) / 4800;
 		double hot_sqcm = hotCount * sqcm_per_pixel;
