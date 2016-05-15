@@ -378,7 +378,9 @@ grillStatus_t processFLIR(uint32_t echoTime){
 			}
 		}
 	}
-	temp_c = ((total / 2400) - 7143) / 29;
+	unsigned int average = total/4800;
+	printf("Max: %d Min: %d Avg: %d Total: %d\n", max, min, average, total);
+	temp_c = (average - 7143) / 29;
 	int distance = get_distance_cm_at_temp_c(temp_c, echoTime);
 	printf("Temperature: %d Corrected distance is: %d  Raw: %d \n", temp_c, distance, echoTime/58);
 	if(min==0 || max>50000) {
@@ -399,6 +401,8 @@ grillStatus_t processFLIR(uint32_t echoTime){
 	return tooCold;
 }
 
+// TODO Handle invalid and too close... Invalid means "hold what I was doing, pray it starts working again"
+
 // Drive the user interface, make the "good" states persist longer than the
 // bad, except for tooHot, whis is important to show quickly.
 //
@@ -411,8 +415,8 @@ grillStatus_t processFLIR(uint32_t echoTime){
 //
 // Flash red if in good state for > 10 seconds
 void showStatus(grillStatus_t new_status){
-    static const uint32_t blink_pulsewidth_us = 50000;
-    static const uint32_t ux_change_threshold_us = 1000000; // TODO work out a reasonable constant
+    static const uint32_t blink_pulsewidth_us = 500;
+    static const uint32_t ux_change_threshold_us = 100000; // TODO work out a reasonable constant
 
     static grillStatus_t pending_status = noGrill;
     static grillStatus_t displayed_status = noGrill;
@@ -501,37 +505,37 @@ void setDisplay(displayColor color)
     }
 }
 
-void storeResults(uint32_t temperature_c, uint32_t pulse_us) {
-	// Store the Thermal Image for later review
-	save_pgm_file();
+void storeResults(uint32_t temperature_c, uint32_t pulse_us, grillStatus_t gs) {
 	// Save thermally-adjusted distance measurement
 	// Estimate size of grillable surface & store
-	float distance = (float) get_distance_cm_at_temp_c(temperature_c, pulse_us);
-	// FOV is 51 degrees, so horizontal measurement is tan(51/2) * h
-	double view_radius = 0.47697553f * distance;
+	if(gs != noGrill) {
+		// Store the Thermal Image for later review
+		save_pgm_file();
+		float distance = (float) get_distance_cm_at_temp_c(temperature_c, pulse_us);
+		// FOV is 51 degrees, so horizontal measurement is tan(51/2) * h
+		double view_radius = 0.47697553f * distance;
+	}
 	
 }
 
 void loop(void) {
 	// Ultrasonic range
 	long echoTime = getEchoMicroseconds();
-	if(echoTime > 4000) { // 1200usec = 20+ cm distance
-		printf("Long echo, not running remainder of loop\n");
-		return; // don't talk to Thermal Camera on short distance
+	grillStatus_t grillStatus  = noGrill;
+	if(echoTime < 4000) { // 1200usec = 20+ cm distance
+		// Something's close, get a Thermal Image
+		// TODO: Pass FLIR image around
+		getFLIR();
+		
+		// Process TI to determine grill status
+		grillStatus = processFLIR(echoTime);
 	}
-	
-	// Something's close, get a Thermal Image
-	// TODO: Pass FLIR image around
-	getFLIR();
-	
-	// Process TI to determine grill status
-	grillStatus_t grillStatus = processFLIR(echoTime);
 
 	// Indicate status to user
 	showStatus(grillStatus);
 
 	// Store Thermal Image and Distance
-	storeResults(temp_c, echoTime);
+	storeResults(temp_c, echoTime, grillStatus);
 }
 
 
