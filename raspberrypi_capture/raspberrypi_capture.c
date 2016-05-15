@@ -275,16 +275,6 @@ int main(int argc, char *argv[])
 
 	while (1)
 	{
-		int timeout = 0;
-		while(transfer(fd)!=59 && (timeout < 2000)){timeout++;}
-		if(timeout > 500) {
-			printf("timeout higher than 500 ?? %d \n", timeout);
-		}
-		if (timeout >= 2000) {
-			pulse_flir_cs();
-			delay(500);
-		}
-
 		loop(); // run the loop once
 		save_pgm_file();
 		delay(200);
@@ -335,9 +325,17 @@ long getEchoMicroseconds() {
  
  
 void getFLIR(void){
-	// nothing here
-	// TODO: Copy FLIR setup/capture from main()
-	;
+	int timeout = 0;
+	while(transfer(fd)!=59 && (timeout < 2000)){timeout++;}
+	if(timeout > 500) {
+		printf("timeout higher than 500 ?? %d \n", timeout);
+	}
+	if (timeout >= 2000) {
+		// Gave up on image, puls chip select to reset Lepton and delay 13 frames
+		pulse_flir_cs();
+		delay(500);
+	}
+
 }
 
 // Image processing function
