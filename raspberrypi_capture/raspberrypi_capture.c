@@ -347,7 +347,7 @@ void getFLIR(void){
 // If there aren't, but the 'edges' are hot, user may need to reposition
 // A pixel on the edge is worth two in the middle
 
-unsigned int bins [10] = {0};
+unsigned int bins[6] = {0};
 // Bins are 0-7k, 500 each up to 9000, then 9000+
 
 unsigned int temp_c = 0;
@@ -372,9 +372,9 @@ grillStatus_t processFLIR(uint32_t echoTime){
 			if(raw_value < 7000) {
 				bins[0]++;
 			} else if (raw_value > 9000) {
-				bins[9]++;
+				bins[5]++;
 			} else {
-				bins[(raw_value-7000)/500]++;
+				bins[(raw_value-7000)/500 + 1]++;
 			}
 		}
 	}
@@ -388,7 +388,7 @@ grillStatus_t processFLIR(uint32_t echoTime){
 		return invalid;
 	}
 	// "Hot" bins are > 8500, meaning bins 8 & 9
-	unsigned int hotCount = bins[8]+bins[9];
+	unsigned int hotCount = bins[4]+bins[5];
 	if(max < 8500 || (hotCount < 400)) { // Not enough heat in image
 		return tooCold;
 	} else if (1000 < hotCount && hotCount < 1500) {
