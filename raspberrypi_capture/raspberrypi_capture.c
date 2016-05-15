@@ -382,7 +382,7 @@ grillStatus_t processFLIR(uint32_t echoTime){
 	printf("Max: %d Min: %d Avg: %d Total: %d\n", max, min, average, total);
 	temp_c = (average - 7143) / 29;
 	int distance = get_distance_cm_at_temp_c(temp_c, echoTime);
-	if(distance <= 4) {
+	if(distance <= 10) {
 		return tooClose;
 	} else if (distance > 80) {
 		return noGrill;
