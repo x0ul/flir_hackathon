@@ -72,7 +72,7 @@ void pin_setup(void) {
         digitalWrite(FLIR_CS, LOW);
 }
 
-
+void loop(void);
 void pulse_flir_cs(void);
 
 static const char *device = "/dev/spidev0.1";
@@ -287,6 +287,25 @@ int getCM() {
  
         return distance;
 }
+
+long getEchoMicroseconds() {
+        //Send trig pulse
+        digitalWrite(TRIG, HIGH);
+        delayMicroseconds(20);
+        digitalWrite(TRIG, LOW);
+ 
+        //Wait for echo start
+        while(digitalRead(ECHO) == LOW);
+ 
+	// TODO: Timeout faster on >100cm echoes
+        //Wait for echo end
+        long startTime = micros();
+        while(digitalRead(ECHO) == HIGH);
+        long travelTime = micros() - startTime;
+
+	return travelTime;
+}
+ 
  
 typedef enum grillStatus_t {
 	tooCold,
@@ -300,22 +319,45 @@ void getFLIR(void){
 	;
 }
 
+typedef enum tempRating_t {
+	ice,
+	human,
+	hot
+} tempRating_t;
+
 grillStatus_t processFLIR(void){
 	// Image data in  lepton_image[80][80];
 	// Look at the middle row.  
-	unsigned int temp_guess[80] = {0};
+	tempRating_t temp_guess[80] = {0};
+	unsigned int max = 0;
+	unsigned int min = INT_MAX;
+	
 	for(int i=0; i<80; i++) {
 		unsigned int raw_value = lepton_image[29][i];
+		if(raw_value > max) max = raw_value;
+		if(raw_value < min) min = raw_value;
 		if(raw_value < 7500) { // Less than human body temp
-			temp_guess[i] = 0;
-		} else if (raw value < 8500) { // Between 20-40 C
-			temp_guess[i] = 1;
+			temp_guess[i] = ice;
+		} else if (raw_value < 8500) { // Between 20-40 C
+			temp_guess[i] = human;
 		} else { // Greater than 40C, assume that's our heat source
-			temp_guess[i] = 2;
+			temp_guess[i] = hot;
 		}
 	}
+	unsigned int left = temp_guess[0];
+	unsigned int middle = temp_guess[39];
+	unsigned int right = temp_guess[79];
 	//Assume we're looking at circular heat source
-	return tooCold;
+	if(max < 8500) { // Not enough heat in image
+		return tooCold;
+	} else if (left==ice && right==ice && middle == hot) { // Heat detected, but not wide enough
+		return tooSmall;
+	} else if (left==hot || right==hot) { // Heat detected, goes off edge
+		// Assume it's too big
+		return justRight;
+	} else {  // Too Cold check failed, assume heat was seen but not enough
+		return tooSmall;
+	}
 }
 
 void setLEDs(grillStatus_t gs){
@@ -339,11 +381,21 @@ void setLEDs(grillStatus_t gs){
 	}
 }
 
+void storeResults(void) {
+	//save_pgm_image()
+	// Save thermally-adjusted distance measurement
+	// Estimate size of grillable surface & store
+	float distance = (float) getCM();
+	// FOV is 51 degrees, so horizontal measurement is tan(51/2) * h
+	double view_radius = 0.47697553f * distance;
+	
+}
+
 void loop(void) {
 	// Ultrasonic range
-	int distance = getCM();
-	if(distance < 20) {
-		return;
+	long echoTime = getEchoMicroseconds();
+	if(echoTime > 1200) { // 1200usec = 20+ cm distance
+		return; // don't talk to Thermal Camera on short distance
 	}
 	
 	// Something's close, get a Thermal Image
@@ -356,6 +408,9 @@ void loop(void) {
 	// Indicate status to user
 	setLEDs(grillStatus);
 
+
+	// Store Thermal Image and Distance
+	storeResults();
 }
 
 	
