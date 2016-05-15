@@ -349,7 +349,7 @@ grillStatus_t processFLIR(void){
 			}
 		}
 	}
-	if(min==0 && max==65534) {
+	if(min==0 && max>50000) {
 		// Lepton wasn't ready, pulse CS and consider image invalid
 		//return invalid
 	}
