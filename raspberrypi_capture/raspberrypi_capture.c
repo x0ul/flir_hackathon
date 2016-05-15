@@ -74,7 +74,7 @@ void pin_setup(void) {
 
 void loop(void);
 void pulse_flir_cs(void);
-uint32_t get_distance_cm_at_temp_c(uint32_t temperature_c, uint32_t pulse_us)
+uint32_t get_distance_cm_at_temp_c(uint32_t temperature_c, uint32_t pulse_us);
 
 static const char *device = "/dev/spidev0.1";
 static uint8_t mode;
@@ -105,7 +105,7 @@ static void save_pgm_file(void)
 	strftime(datebuffer, 26, "%Y%m%d_%H%M%S", tm_info);
 
 	do {
-		sprintf(image_name, "IMG_%s_%.4d.pgm", datebuffer, image_index);
+		sprintf(image_name, "images/IMG_%s_%.4d.pgm", datebuffer, image_index);
 		image_index += 1;
 		if (image_index > 9999) 
 		{
@@ -263,7 +263,7 @@ int main(int argc, char *argv[])
 
 	loop(); // run the loop once
 
-//	save_pgm_file();
+	save_pgm_file();
 
 	return ret;
 }
@@ -320,45 +320,47 @@ void getFLIR(void){
 	;
 }
 
-typedef enum tempRating_t {
-	ice,
-	human,
-	hot
-} tempRating_t;
+// Image processing function
+// General approach is to compute a histogram of temperature values
+// If there's enough "hot" pixels, signal that the fire's ready
+// If there aren't, but the 'edges' are hot, user may need to reposition
+// A pixel on the edge is worth two in the middle
+
+unsigned int bins [10] = {0};
+// Bins are 0-7k, 500 each up to 9000, then 9000+
 
 grillStatus_t processFLIR(void){
 	// Image data in  lepton_image[80][80];
 	// Look at the middle row.  
-	tempRating_t temp_guess[80] = {0};
 	unsigned int max = 0;
 	unsigned int min = INT_MAX;
 	
-	for(int i=0; i<80; i++) {
-		unsigned int raw_value = lepton_image[29][i];
-		if(raw_value > max) max = raw_value;
-		if(raw_value < min) min = raw_value;
-		if(raw_value < 7500) { // Less than human body temp
-			temp_guess[i] = ice;
-		} else if (raw_value < 8500) { // Between 20-40 C
-			temp_guess[i] = human;
-		} else { // Greater than 40C, assume that's our heat source
-			temp_guess[i] = hot;
+	for(int i=0; i<60; i++) {
+		for(int j=0; j<80; j++) {
+			unsigned int raw_value = lepton_image[i][j];
+			if(raw_value > max) max = raw_value;
+			if(raw_value < min) min = raw_value;
+			if(raw_value < 7000) {
+				bins[0]++;
+			} else if (raw_value > 9000) {
+				bins[9]++;
+			} else {
+				bins[(raw_value-7000)/500]++;
+			}
 		}
 	}
-	unsigned int left = temp_guess[0];
-	unsigned int middle = temp_guess[39];
-	unsigned int right = temp_guess[79];
-	//Assume we're looking at circular heat source
-	if(max < 8500) { // Not enough heat in image
+	// "Hot" bins are > 8500, meaning bins 8 & 9
+	unsigned int hotCount = bins[8]+bins[9];
+	if(max < 8500 || (hotCount < 400)) { // Not enough heat in image
 		return tooCold;
-	} else if (left==ice && right==ice && middle == hot) { // Heat detected, but not wide enough
+	} else if (1000 < hotCount && hotCount < 1500) {
+		// Might be hot enough, edge check can push to green
+		// Otherwise orange
 		return tooSmall;
-	} else if (left==hot || right==hot) { // Heat detected, goes off edge
-		// Assume it's too big
+	} else {
 		return justRight;
-	} else {  // Too Cold check failed, assume heat was seen but not enough
-		return tooSmall;
 	}
+	return tooCold;
 }
 
 void setLEDs(grillStatus_t gs){
@@ -366,18 +368,22 @@ void setLEDs(grillStatus_t gs){
 		case tooCold: 
 			digitalWrite(RED_LED, HIGH);
 			digitalWrite(GREEN_LED, LOW);
+			printf("Too cold!\n");
 			break;
 		case tooSmall: 
 			digitalWrite(RED_LED, HIGH);
 			digitalWrite(GREEN_LED, HIGH);
+			printf("Too small!\n");
 			break;
 		case justRight: 
 			digitalWrite(RED_LED, LOW);
 			digitalWrite(GREEN_LED, HIGH);
+			printf("Juuuuuust right!!\n");
 			break;
 		default: 
 			digitalWrite(RED_LED, LOW);
 			digitalWrite(GREEN_LED, LOW);
+			printf("YOU FORGOT THIS ONE!!\n");
 			break;
 	}
 }
@@ -408,7 +414,6 @@ void loop(void) {
 
 	// Indicate status to user
 	setLEDs(grillStatus);
-
 
 	// Store Thermal Image and Distance
 	storeResults();
