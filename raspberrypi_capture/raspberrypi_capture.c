@@ -287,6 +287,25 @@ int getCM() {
  
         return distance;
 }
+
+long getEchoMicroseconds() {
+        //Send trig pulse
+        digitalWrite(TRIG, HIGH);
+        delayMicroseconds(20);
+        digitalWrite(TRIG, LOW);
+ 
+        //Wait for echo start
+        while(digitalRead(ECHO) == LOW);
+ 
+	// TODO: Timeout faster on >100cm echoes
+        //Wait for echo end
+        long startTime = micros();
+        while(digitalRead(ECHO) == HIGH);
+        long travelTime = micros() - startTime;
+
+	return travelTime;
+}
+ 
  
 typedef enum grillStatus_t {
 	tooCold,
@@ -374,9 +393,9 @@ void storeResults(void) {
 
 void loop(void) {
 	// Ultrasonic range
-	int distance = getCM();
-	if(distance < 20) {
-		return;
+	long echoTime = getEchoMicroseconds();
+	if(echoTime > 1200) { // 1200usec = 20+ cm distance
+		return; // don't talk to Thermal Camera on short distance
 	}
 	
 	// Something's close, get a Thermal Image
