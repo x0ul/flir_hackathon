@@ -300,10 +300,16 @@ void getFLIR(void){
 	;
 }
 
+typedef enum tempRating_t {
+	ice,
+	human,
+	hot
+} tempRating_t;
+
 grillStatus_t processFLIR(void){
 	// Image data in  lepton_image[80][80];
 	// Look at the middle row.  
-	unsigned int temp_guess[80] = {0};
+	tempRating_t temp_guess[80] = {0};
 	unsigned int max = 0;
 	unsigned int min = INT_MAX;
 	
@@ -312,24 +318,25 @@ grillStatus_t processFLIR(void){
 		if(raw_value > max) max = raw_value;
 		if(raw_value < min) min = raw_value;
 		if(raw_value < 7500) { // Less than human body temp
-			temp_guess[i] = 0;
+			temp_guess[i] = ice;
 		} else if (raw_value < 8500) { // Between 20-40 C
-			temp_guess[i] = 1;
+			temp_guess[i] = human;
 		} else { // Greater than 40C, assume that's our heat source
-			temp_guess[i] = 2;
+			temp_guess[i] = hot;
 		}
 	}
 	unsigned int left = temp_guess[0];
 	unsigned int middle = temp_guess[39];
 	unsigned int right = temp_guess[79];
 	//Assume we're looking at circular heat source
-	if(max < 8500) {
+	if(max < 8500) { // Not enough heat in image
 		return tooCold;
-	} else if (left==0 && right==0 && middle == 2) {
+	} else if (left==ice && right==ice && middle == hot) { // Heat detected, but not wide enough
 		return tooSmall;
-	} else if (left==2 || right==2) {
+	} else if (left==hot || right==hot) { // Heat detected, goes off edge
+		// Assume it's too big
 		return justRight;
-	} else {
+	} else {  // Too Cold check failed, assume heat was seen but not enough
 		return tooSmall;
 	}
 }
@@ -359,7 +366,9 @@ void storeResults(void) {
 	//save_pgm_image()
 	// Save thermally-adjusted distance measurement
 	// Estimate size of grillable surface & store
+	float distance = (float) getCM();
 	// FOV is 51 degrees, so horizontal measurement is tan(51/2) * h
+	double view_radius = 0.47697553f * distance;
 	
 }
 
