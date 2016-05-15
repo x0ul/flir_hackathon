@@ -349,6 +349,10 @@ grillStatus_t processFLIR(void){
 			}
 		}
 	}
+	if(min==0 && max==65534) {
+		// Lepton wasn't ready, pulse CS and consider image invalid
+		//return invalid
+	}
 	// "Hot" bins are > 8500, meaning bins 8 & 9
 	unsigned int hotCount = bins[8]+bins[9];
 	if(max < 8500 || (hotCount < 400)) { // Not enough heat in image
