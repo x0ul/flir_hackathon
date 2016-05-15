@@ -36,6 +36,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <limits.h>
 
 #include <time.h>
+#include <wiringPi.h>
+
+#define TRIG 0
+#define ECHO 2
+
+#define RED_LED 5
+#define GREEN_LED 4
+ 
+#define FLIR_CS 6
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -45,11 +54,32 @@ static void pabort(const char *s)
 	abort();
 }
 
+void pin_setup(void) {
+        wiringPiSetup();
+        pinMode(TRIG, OUTPUT);
+        pinMode(ECHO, INPUT);
+
+	pinMode(RED_LED, OUTPUT);
+	pinMode(GREEN_LED, OUTPUT);
+	pinMode(FLIR_CS, OUTPUT);
+ 
+        //TRIG pin must start LOW
+        digitalWrite(TRIG, LOW);
+        digitalWrite(RED_LED, LOW);
+        digitalWrite(GREEN_LED, LOW);
+        digitalWrite(FLIR_CS, HIGH);
+        delay(30);
+        digitalWrite(FLIR_CS, LOW);
+}
+
+
+void pulse_flir_cs(void);
+
 static const char *device = "/dev/spidev0.1";
 static uint8_t mode;
 static uint8_t bits = 8;
 static uint32_t speed = 16000000;
-static uint16_t delay;
+static uint16_t my_delay;
 
 #define VOSPI_FRAME_SIZE (164)
 uint8_t lepton_frame_packet[VOSPI_FRAME_SIZE];
@@ -91,7 +121,7 @@ static void save_pgm_file(void)
 		exit(1);
 	}
 
-	unsigned long row_averages[60] = {0};
+	unsigned long row_average[60] = {0};
 
 	printf("Calculating min/max values for proper scaling...\n");
 	for(i=0;i<60;i++)
@@ -113,7 +143,7 @@ static void save_pgm_file(void)
 	for(i=0; i<60;i++) {
 		total += row_average[i];
 	}
-	printf("average = %u", total / 2400);
+	printf("average = %lu\n", total / 60);
 	
 	printf("maxval = %u\n",maxval);
 	printf("minval = %u\n",minval);
@@ -135,14 +165,13 @@ static void save_pgm_file(void)
 int transfer(int fd)
 {
 	int ret;
-	int i;
-	int frame_number;
+	int frame_number = -1;
 	uint8_t tx[VOSPI_FRAME_SIZE] = {0, };
 	struct spi_ioc_transfer tr = {
 		.tx_buf = (unsigned long)tx,
 		.rx_buf = (unsigned long)lepton_frame_packet,
 		.len = VOSPI_FRAME_SIZE,
-		.delay_usecs = delay,
+		.delay_usecs = my_delay,
 		.speed_hz = speed,
 		.bits_per_word = bits,
 	};
@@ -157,7 +186,7 @@ int transfer(int fd)
 
 		if(frame_number < 60 )
 		{
-			for(i=0;i<80;i++)
+			for(int i=0;i<80;i++)
 			{
 				lepton_image[frame_number][i] = (lepton_frame_packet[2*i+4] << 8 | lepton_frame_packet[2*i+5]);
 			}
@@ -214,15 +243,126 @@ int main(int argc, char *argv[])
 		pabort("can't get max speed hz");
 	}
 
+	pin_setup();
+
 	printf("spi mode: %d\n", mode);
 	printf("bits per word: %d\n", bits);
 	printf("max speed: %d Hz (%d KHz)\n", speed, speed/1000);
 
-	while(transfer(fd)!=59){}
+	//pulse_flir_cs();
+
+	int timeout = 0;
+
+	while(transfer(fd)!=59 && (timeout < 2000)){timeout++;}
+	if(timeout > 500) {
+		printf("timeout higher than 500 ?? %d \n", timeout);
+	}
 
 	close(fd);
 
-	save_pgm_file();
+	loop(); // run the loop once
+
+//	save_pgm_file();
 
 	return ret;
+}
+
+int getCM() {
+        //Send trig pulse
+        digitalWrite(TRIG, HIGH);
+        delayMicroseconds(20);
+        digitalWrite(TRIG, LOW);
+ 
+        //Wait for echo start
+        while(digitalRead(ECHO) == LOW);
+ 
+	// TODO: Timeout faster on >100cm echoes
+        //Wait for echo end
+        long startTime = micros();
+        while(digitalRead(ECHO) == HIGH);
+        long travelTime = micros() - startTime;
+ 
+        //Get distance in cm
+        int distance = travelTime / 58;
+ 
+        return distance;
+}
+ 
+typedef enum grillStatus_t {
+	tooCold,
+	tooSmall,
+	justRight
+} grillStatus_t;
+
+void getFLIR(void){
+	// nothing here
+	// TODO: Copy FLIR setup/capture from main()
+	;
+}
+
+grillStatus_t processFLIR(void){
+	// Image data in  lepton_image[80][80];
+	// Look at the middle row.  
+	unsigned int temp_guess[80] = {0};
+	for(int i=0; i<80; i++) {
+		unsigned int raw_value = lepton_image[29][i];
+		if(raw_value < 7500) { // Less than human body temp
+			temp_guess[i] = 0;
+		} else if (raw value < 8500) { // Between 20-40 C
+			temp_guess[i] = 1;
+		} else { // Greater than 40C, assume that's our heat source
+			temp_guess[i] = 2;
+		}
+	}
+	//Assume we're looking at circular heat source
+	return tooCold;
+}
+
+void setLEDs(grillStatus_t gs){
+	switch(gs){
+		case tooCold: 
+			digitalWrite(RED_LED, HIGH);
+			digitalWrite(GREEN_LED, LOW);
+			break;
+		case tooSmall: 
+			digitalWrite(RED_LED, HIGH);
+			digitalWrite(GREEN_LED, HIGH);
+			break;
+		case justRight: 
+			digitalWrite(RED_LED, LOW);
+			digitalWrite(GREEN_LED, HIGH);
+			break;
+		default: 
+			digitalWrite(RED_LED, LOW);
+			digitalWrite(GREEN_LED, LOW);
+			break;
+	}
+}
+
+void loop(void) {
+	// Ultrasonic range
+	int distance = getCM();
+	if(distance < 20) {
+		return;
+	}
+	
+	// Something's close, get a Thermal Image
+	// TODO: Pass FLIR image around
+	getFLIR();
+	
+	// Process TI to determine grill status
+	grillStatus_t grillStatus = processFLIR();
+
+	// Indicate status to user
+	setLEDs(grillStatus);
+
+}
+
+	
+
+void pulse_flir_cs(void) {
+        digitalWrite(FLIR_CS, HIGH);
+        delay(200);
+        digitalWrite(FLIR_CS, LOW);
+        delay(100);
 }
