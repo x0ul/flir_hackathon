@@ -72,9 +72,18 @@ void pin_setup(void) {
         digitalWrite(FLIR_CS, LOW);
 }
 
+typedef enum displayColor {
+    DISPLAYCOLOR_OFF,
+    DISPLAYCOLOR_RED,
+    DISPLAYCOLOR_GREEN,
+    DISPLAYCOLOR_ORANGE
+} displayColor;
+
 void loop(void);
 void pulse_flir_cs(void);
 uint32_t get_distance_cm_at_temp_c(uint32_t temperature_c, uint32_t pulse_us)
+void showStatus(grillStatus_t gs);
+void setDisplay(displayColor color);
 
 static const char *device = "/dev/spidev0.1";
 static uint8_t mode;
@@ -309,9 +318,12 @@ long getEchoMicroseconds() {
  
  
 typedef enum grillStatus_t {
+    noGrill,
 	tooCold,
 	tooSmall,
-	justRight
+	justRight,
+    tooHot,
+    tooClose
 } grillStatus_t;
 
 void getFLIR(void){
@@ -361,25 +373,101 @@ grillStatus_t processFLIR(void){
 	}
 }
 
-void setLEDs(grillStatus_t gs){
-	switch(gs){
-		case tooCold: 
-			digitalWrite(RED_LED, HIGH);
-			digitalWrite(GREEN_LED, LOW);
-			break;
-		case tooSmall: 
-			digitalWrite(RED_LED, HIGH);
-			digitalWrite(GREEN_LED, HIGH);
-			break;
-		case justRight: 
-			digitalWrite(RED_LED, LOW);
-			digitalWrite(GREEN_LED, HIGH);
-			break;
-		default: 
-			digitalWrite(RED_LED, LOW);
-			digitalWrite(GREEN_LED, LOW);
-			break;
-	}
+// Drive the user interface, make the "good" states persist longer than the
+// bad, except for tooHot, whis is important to show quickly.
+//
+// noGrill      -> ALL OFF
+// tooCold      -> RED SOLID
+// tooSmall     -> ORANGE SOLID
+// justRight    -> GREEN SOLID
+// tooHot       -> RED BLINK
+// tooClose     -> RED BLINK
+void showStatus(grillStatus_t gs){
+    static const uint32_t blink_pulsewidth_us = 50000;
+    static const uint32_t ux_change_threshold = 100; // TODO work out a reasonable constant
+    static grillStatus_t last_status = noGrill;
+    static uint32_t status_request_count;
+    static uint32_t next_blink_update_us;
+    static bool toggle;
+
+    if (gs != last_status) {
+        status_request_count = 0;
+    }
+    else {
+        status_request_count++;
+    }
+
+    // High priority states, handle immediately
+    if (gs == justRight || gs == tooHot || gs == tooClose) {
+        switch (gs)
+        {
+            case justRight:
+                setDisplay(DISPLAYCOLOR_GREEN);
+                break;
+
+            // Blink red
+            case tooHot:
+            case tooClose:
+            {
+                uint32_t now = micros();
+                if (now >= next_blink_update_us)
+                {
+                    next_blink_update_us = now + blink_pulsewidth_us;
+                    setDisplay(toggle ? DISPLAYCOLOR_RED : DISPLAYCOLOR_OFF);
+                    toggle != toggle;
+                }
+            }
+            break;
+            
+            default:
+            break;
+
+        }
+        return; // GET OUT EARLY
+    }
+
+    if (status_request_count >= ux_change_threshold) {
+        switch(gs){
+            case tooCold: 
+                setDisplay(DISPLAYCOLOR_RED);
+                break;
+
+            case tooSmall: 
+                setDisplay(DISPLAYCOLOR_ORANGE);
+                break;
+
+            default:
+                break;
+        }
+
+        last_status = gs;
+    }
+}
+
+void setDisplay(displayColor color)
+{
+    switch (color)
+    {
+        case DISPLAYCOLOR_OFF:
+            digitalWrite(RED_LED, LOW);
+            digitalWrite(GREEN_LED, LOW);
+            break;
+
+        case DISPLAYCOLOR_RED:
+            digitalWrite(RED_LED, HIGH);
+            digitalWrite(GREEN_LED, LOW);
+            break;
+
+        case DISPLAYCOLOR_GREEN:
+            digitalWrite(RED_LED, LOW);
+            digitalWrite(GREEN_LED, HIGH);
+            break;
+
+        case DISPLAYCOLOR_ORANGE:
+            digitalWrite(RED_LED, HIGH);
+            digitalWrite(GREEN_LED, HIGH);
+            break;
+    }
 }
 
 void storeResults(void) {
@@ -407,7 +495,7 @@ void loop(void) {
 	grillStatus_t grillStatus = processFLIR();
 
 	// Indicate status to user
-	setLEDs(grillStatus);
+	showStatus(grillStatus);
 
 
 	// Store Thermal Image and Distance
