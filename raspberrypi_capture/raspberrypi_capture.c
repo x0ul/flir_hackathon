@@ -83,6 +83,9 @@ typedef enum grillStatus_t {
     invalid
 } grillStatus_t;
 
+static const char* grillStatusStrings[] = {
+	"noGrill", "tooCold", "tooSmall", "justRight", "tooHot", "tooClose", "invalid"};
+
 
 typedef enum displayColor {
     DISPLAYCOLOR_OFF,
@@ -217,10 +220,11 @@ int transfer(int fd)
 	return frame_number;
 }
 
+int fd;
+
 int main(int argc, char *argv[])
 {
 	int ret = 0;
-	int fd;
 
 
 	fd = open(device, O_RDWR);
@@ -276,7 +280,6 @@ int main(int argc, char *argv[])
 	while (1)
 	{
 		loop(); // run the loop once
-		save_pgm_file();
 		delay(200);
 	}
 
@@ -347,15 +350,23 @@ void getFLIR(void){
 unsigned int bins [10] = {0};
 // Bins are 0-7k, 500 each up to 9000, then 9000+
 
-grillStatus_t processFLIR(void){
+unsigned int temp_c = 0;
+
+grillStatus_t processFLIR(uint32_t echoTime){
 	// Image data in  lepton_image[80][80];
 	// Look at the middle row.  
 	unsigned int max = 0;
 	unsigned int min = INT_MAX;
+	for(int garbage=0; garbage<10; garbage++) {
+		bins[garbage] = 0;
+	}
+
+	unsigned long total = 0;
 	
 	for(int i=0; i<60; i++) {
 		for(int j=0; j<80; j++) {
 			unsigned int raw_value = lepton_image[i][j];
+			total += raw_value;
 			if(raw_value > max) max = raw_value;
 			if(raw_value < min) min = raw_value;
 			if(raw_value < 7000) {
@@ -367,7 +378,10 @@ grillStatus_t processFLIR(void){
 			}
 		}
 	}
-	if(min==0 && max>50000) {
+	temp_c = ((total / 2400) - 7143) / 29;
+	int distance = get_distance_cm_at_temp_c(temp_c, echoTime);
+	printf("Temperature: %d Corrected distance is: %d  Raw: %d \n", temp_c, distance, echoTime/58);
+	if(min==0 || max>50000) {
 		// Lepton wasn't ready, pulse CS and consider image invalid
 		return invalid;
 	}
@@ -406,6 +420,8 @@ void showStatus(grillStatus_t new_status){
     static uint32_t next_blink_update_us;
     static bool toggle;
 
+    printf("new_status: %s\n", grillStatusStrings[new_status]);
+
     uint32_t now = micros();
 
     // Set new timeout if pending status changes
@@ -430,7 +446,7 @@ void showStatus(grillStatus_t new_status){
         {
             next_blink_update_us = now + blink_pulsewidth_us;
             setDisplay(toggle ? DISPLAYCOLOR_RED : DISPLAYCOLOR_OFF);
-            toggle != toggle;
+            toggle = !toggle;
         }
         displayed_status = new_status;
         return;
@@ -485,11 +501,12 @@ void setDisplay(displayColor color)
     }
 }
 
-void storeResults(void) {
-	//save_pgm_image()
+void storeResults(uint32_t temperature_c, uint32_t pulse_us) {
+	// Store the Thermal Image for later review
+	save_pgm_file();
 	// Save thermally-adjusted distance measurement
 	// Estimate size of grillable surface & store
-	float distance = (float) getCM();
+	float distance = (float) get_distance_cm_at_temp_c(temperature_c, pulse_us);
 	// FOV is 51 degrees, so horizontal measurement is tan(51/2) * h
 	double view_radius = 0.47697553f * distance;
 	
@@ -498,7 +515,8 @@ void storeResults(void) {
 void loop(void) {
 	// Ultrasonic range
 	long echoTime = getEchoMicroseconds();
-	if(echoTime > 1200) { // 1200usec = 20+ cm distance
+	if(echoTime > 4000) { // 1200usec = 20+ cm distance
+		printf("Long echo, not running remainder of loop\n");
 		return; // don't talk to Thermal Camera on short distance
 	}
 	
@@ -507,13 +525,13 @@ void loop(void) {
 	getFLIR();
 	
 	// Process TI to determine grill status
-	grillStatus_t grillStatus = processFLIR();
+	grillStatus_t grillStatus = processFLIR(echoTime);
 
 	// Indicate status to user
 	showStatus(grillStatus);
 
 	// Store Thermal Image and Distance
-	storeResults();
+	storeResults(temp_c, echoTime);
 }
 
 
