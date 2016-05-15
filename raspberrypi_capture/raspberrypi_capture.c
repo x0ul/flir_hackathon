@@ -347,7 +347,7 @@ void getFLIR(void){
 // If there aren't, but the 'edges' are hot, user may need to reposition
 // A pixel on the edge is worth two in the middle
 
-unsigned int bins[6] = {0};
+unsigned int bins[10] = {0};
 // Bins are 0-7k, 500 each up to 9000, then 9000+
 
 unsigned int temp_c = 0;
@@ -382,6 +382,11 @@ grillStatus_t processFLIR(uint32_t echoTime){
 	printf("Max: %d Min: %d Avg: %d Total: %d\n", max, min, average, total);
 	temp_c = (average - 7143) / 29;
 	int distance = get_distance_cm_at_temp_c(temp_c, echoTime);
+	if(distance <= 4) {
+		return tooClose;
+	} else if (distance > 80) {
+		return noGrill;
+	}
 	printf("Temperature: %d Corrected distance is: %d  Raw: %d \n", temp_c, distance, echoTime/58);
 	if(min==0 || max>50000) {
 		// Lepton wasn't ready, pulse CS and consider image invalid
@@ -391,12 +396,17 @@ grillStatus_t processFLIR(uint32_t echoTime){
 	unsigned int hotCount = bins[4]+bins[5];
 	if(max < 8500 || (hotCount < 400)) { // Not enough heat in image
 		return tooCold;
-	} else if (1000 < hotCount && hotCount < 1500) {
-		// Might be hot enough, edge check can push to green
-		// Otherwise orange
-		return tooSmall;
+	//} else if (hotCount < 1500) {
 	} else {
-		return justRight;
+		// Might be hot enough, edge check can push to green
+		double sqcm_per_pixel = ((0.47697553 * distance * 2) * (0.47697553 * distance * 2)) / 4800;
+		double hot_sqcm = hotCount * sqcm_per_pixel;
+		printf("Hot area: %f \n", hot_sqcm);
+		if(hot_sqcm > 100) {
+			return justRight;
+		} else {
+			return tooSmall;
+		}
 	}
 	return tooCold;
 }
