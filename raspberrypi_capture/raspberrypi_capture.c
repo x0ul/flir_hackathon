@@ -82,7 +82,7 @@ typedef enum displayColor {
 void loop(void);
 void pulse_flir_cs(void);
 uint32_t get_distance_cm_at_temp_c(uint32_t temperature_c, uint32_t pulse_us);
-void showStatus(grillStatus_t gs);
+void showStatus(grillStatus_t new_status);
 void setDisplay(displayColor color);
 
 static const char *device = "/dev/spidev0.1";
@@ -388,52 +388,55 @@ grillStatus_t processFLIR(void){
 // justRight    -> GREEN SOLID
 // tooHot       -> RED BLINK
 // tooClose     -> RED BLINK
-void showStatus(grillStatus_t gs){
+//
+// Flash red if in good state for > 10 seconds
+void showStatus(grillStatus_t new_status){
     static const uint32_t blink_pulsewidth_us = 50000;
-    static const uint32_t ux_change_threshold = 100; // TODO work out a reasonable constant
-    static grillStatus_t last_status = noGrill;
-    static uint32_t status_request_count;
+    static const uint32_t ux_change_threshold_us = 1000000; // TODO work out a reasonable constant
+
+    static grillStatus_t pending_status = noGrill;
+    static grillStatus_t displayed_status = noGrill;
+    static uint32_t status_change_timeout;
     static uint32_t next_blink_update_us;
     static bool toggle;
 
-    if (gs != last_status) {
-        status_request_count = 0;
-    }
-    else {
-        status_request_count++;
+    uint32_t now = micros();
+
+    // Set new timeout if pending status changes
+    if (new_status != pending_status) {
+        status_change_timeout = ux_change_threshold_us + now;
+        pending_status = new_status;
     }
 
-    // High priority states, handle immediately
-    if (gs == justRight || gs == tooHot || gs == tooClose) {
-        switch (gs)
+    bool timeout_expired = now >= status_change_timeout;
+
+    // Handle priority statuses immediately
+    if (new_status == justRight)
+    {
+        setDisplay(DISPLAYCOLOR_GREEN);
+        displayed_status = justRight;
+        return;
+    }
+    // Blink red
+    else if (new_status == tooHot || new_status == tooClose)
+    {
+        if (now >= next_blink_update_us)
         {
-            case justRight:
-                setDisplay(DISPLAYCOLOR_GREEN);
+            next_blink_update_us = now + blink_pulsewidth_us;
+            setDisplay(toggle ? DISPLAYCOLOR_RED : DISPLAYCOLOR_OFF);
+            toggle != toggle;
+        }
+        displayed_status = new_status;
+        return;
+    }
+
+    // Handle regular statuses
+    if (timeout_expired) {
+        switch(pending_status){
+            case noGrill:
+                setDisplay(DISPLAYCOLOR_OFF);
                 break;
 
-            // Blink red
-            case tooHot:
-            case tooClose:
-            {
-                uint32_t now = micros();
-                if (now >= next_blink_update_us)
-                {
-                    next_blink_update_us = now + blink_pulsewidth_us;
-                    setDisplay(toggle ? DISPLAYCOLOR_RED : DISPLAYCOLOR_OFF);
-                    toggle != toggle;
-                }
-            }
-            break;
-            
-            default:
-            break;
-
-        }
-        return; // GET OUT EARLY
-    }
-
-    if (status_request_count >= ux_change_threshold) {
-        switch(gs){
             case tooCold: 
                 setDisplay(DISPLAYCOLOR_RED);
                 break;
@@ -446,7 +449,7 @@ void showStatus(grillStatus_t gs){
                 break;
         }
 
-        last_status = gs;
+        displayed_status = pending_status;
     }
 }
 
