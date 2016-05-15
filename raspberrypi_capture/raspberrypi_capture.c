@@ -74,6 +74,7 @@ void pin_setup(void) {
 
 void loop(void);
 void pulse_flir_cs(void);
+uint32_t get_distance_cm_at_temp_c(uint32_t temperature_c, uint32_t pulse_us)
 
 static const char *device = "/dev/spidev0.1";
 static uint8_t mode;
@@ -413,7 +414,6 @@ void loop(void) {
 	storeResults();
 }
 
-	
 
 void pulse_flir_cs(void) {
         digitalWrite(FLIR_CS, HIGH);
@@ -421,3 +421,9 @@ void pulse_flir_cs(void) {
         digitalWrite(FLIR_CS, LOW);
         delay(100);
 }
+
+uint32_t get_distance_cm_at_temp_c(uint32_t temperature_c, uint32_t pulse_us)
+{
+    return (pulse_us * (331300 + 606 * temperature_c)) / 20000000;
+}
+
