@@ -72,7 +72,7 @@ void pin_setup(void) {
         digitalWrite(FLIR_CS, LOW);
 }
 
-
+void loop(void);
 void pulse_flir_cs(void);
 
 static const char *device = "/dev/spidev0.1";
@@ -304,18 +304,34 @@ grillStatus_t processFLIR(void){
 	// Image data in  lepton_image[80][80];
 	// Look at the middle row.  
 	unsigned int temp_guess[80] = {0};
+	unsigned int max = 0;
+	unsigned int min = INT_MAX;
+	
 	for(int i=0; i<80; i++) {
 		unsigned int raw_value = lepton_image[29][i];
+		if(raw_value > max) max = raw_value;
+		if(raw_value < min) min = raw_value;
 		if(raw_value < 7500) { // Less than human body temp
 			temp_guess[i] = 0;
-		} else if (raw value < 8500) { // Between 20-40 C
+		} else if (raw_value < 8500) { // Between 20-40 C
 			temp_guess[i] = 1;
 		} else { // Greater than 40C, assume that's our heat source
 			temp_guess[i] = 2;
 		}
 	}
+	unsigned int left = temp_guess[0];
+	unsigned int middle = temp_guess[39];
+	unsigned int right = temp_guess[79];
 	//Assume we're looking at circular heat source
-	return tooCold;
+	if(max < 8500) {
+		return tooCold;
+	} else if (left==0 && right==0 && middle == 2) {
+		return tooSmall;
+	} else if (left==2 || right==2) {
+		return justRight;
+	} else {
+		return tooSmall;
+	}
 }
 
 void setLEDs(grillStatus_t gs){
@@ -339,6 +355,14 @@ void setLEDs(grillStatus_t gs){
 	}
 }
 
+void storeResults(void) {
+	//save_pgm_image()
+	// Save thermally-adjusted distance measurement
+	// Estimate size of grillable surface & store
+	// FOV is 51 degrees, so horizontal measurement is tan(51/2) * h
+	
+}
+
 void loop(void) {
 	// Ultrasonic range
 	int distance = getCM();
@@ -356,6 +380,9 @@ void loop(void) {
 	// Indicate status to user
 	setLEDs(grillStatus);
 
+
+	// Store Thermal Image and Distance
+	storeResults();
 }
 
 	
