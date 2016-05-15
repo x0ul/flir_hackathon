@@ -25,6 +25,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -71,6 +72,17 @@ void pin_setup(void) {
         delay(30);
         digitalWrite(FLIR_CS, LOW);
 }
+
+typedef enum grillStatus_t {
+    noGrill,
+    tooCold,
+    tooSmall,
+    justRight,
+    tooHot,
+    tooClose,
+    invalid
+} grillStatus_t;
+
 
 typedef enum displayColor {
     DISPLAYCOLOR_OFF,
@@ -261,19 +273,24 @@ int main(int argc, char *argv[])
 
 	//pulse_flir_cs();
 
-	int timeout = 0;
+	while (1)
+	{
+		int timeout = 0;
+		while(transfer(fd)!=59 && (timeout < 2000)){timeout++;}
+		if(timeout > 500) {
+			printf("timeout higher than 500 ?? %d \n", timeout);
+		}
+		if (timeout >= 2000) {
+			pulse_flir_cs();
+			delay(500);
+		}
 
-	while(transfer(fd)!=59 && (timeout < 2000)){timeout++;}
-	if(timeout > 500) {
-		printf("timeout higher than 500 ?? %d \n", timeout);
+		loop(); // run the loop once
+		save_pgm_file();
+		delay(200);
 	}
 
 	close(fd);
-
-	loop(); // run the loop once
-
-	save_pgm_file();
-
 	return ret;
 }
 
@@ -317,15 +334,6 @@ long getEchoMicroseconds() {
 }
  
  
-typedef enum grillStatus_t {
-    noGrill,
-	tooCold,
-	tooSmall,
-	justRight,
-    tooHot,
-    tooClose
-} grillStatus_t;
-
 void getFLIR(void){
 	// nothing here
 	// TODO: Copy FLIR setup/capture from main()
@@ -363,7 +371,7 @@ grillStatus_t processFLIR(void){
 	}
 	if(min==0 && max>50000) {
 		// Lepton wasn't ready, pulse CS and consider image invalid
-		//return invalid
+		return invalid;
 	}
 	// "Hot" bins are > 8500, meaning bins 8 & 9
 	unsigned int hotCount = bins[8]+bins[9];
@@ -477,6 +485,7 @@ void setDisplay(displayColor color)
             digitalWrite(GREEN_LED, HIGH);
             break;
     }
+}
 
 void storeResults(void) {
 	//save_pgm_image()
