@@ -16,7 +16,7 @@ See a demo video at the links below:
 
 [Demo 2](https://github.com/x0ul/flir_hackathon/blob/master/IMG_1723.m4v)
 
-[Presentation slides](https://github.com/x0ul/flir_hackathon/raspberrypi_capture/FLIR Hackathon - BBQ Final.pdf)
+[Presentation slides](https://github.com/x0ul/flir_hackathon/blob/master/raspberrypi_capture/FLIR%20Hackathon%20-%20BBQ%20Final.pdf)
 
 Technical Details:
   * Platform: Raspberry Pi 2
