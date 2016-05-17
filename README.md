@@ -12,9 +12,11 @@ The wearable device would indicate whether the heat source was good for grilling
 
 See a demo video at the links below:
 
-https://github.com/x0ul/flir_hackathon/blob/master/IMG_1722.m4v
+[Demo 1](https://github.com/x0ul/flir_hackathon/blob/master/IMG_1722.m4v)
 
-https://github.com/x0ul/flir_hackathon/blob/master/IMG_1723.m4v
+[Demo 2](https://github.com/x0ul/flir_hackathon/blob/master/IMG_1723.m4v)
+
+[Presentation slides](https://github.com/x0ul/flir_hackathon/raspberrypi_capture/FLIR Hackathon - BBQ Final.pdf)
 
 Technical Details:
   * Platform: Raspberry Pi 2
